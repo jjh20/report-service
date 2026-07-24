@@ -1,11 +1,4 @@
-const mongoose = require('mongoose');
-
-// Mismo esquema que los demas microservicios -- comparten la coleccion
-// "accounts" en la base "banking". Este servicio es de SOLO LECTURA.
-const accountSchema = new mongoose.Schema({
-    accountNumber: { type: String, required: true, unique: true },
-    owner: { type: String, required: true },
-    balance: { type: Number, required: true, default: 0 },
-});
-
-module.exports = mongoose.model('Account', accountSchema);
+MONGO_URI=mongodb://mongo-db:27017/banking
+RABBITMQ_URL=amqp://guest:guest@rabbitmq-qa:5672
+MAX_MOVIMIENTOS_PERMITIDOS=5000
+PORT=3000
