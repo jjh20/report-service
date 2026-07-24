@@ -20,7 +20,6 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://mongodb:27017/bankdb?retryW
         app.listen(PUERTO, () => console.log(`Servicio de reportes corriendo en puerto ${PUERTO}`));
     })
     .catch(err => console.error('Error de conexión:', err));
-
 mongoose.connection.on('disconnected', () => {
     console.error('[Mongo] Desconectado - el servicio esta operando sin base de datos');
 });
