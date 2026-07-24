@@ -1,18 +1,44 @@
-const mongoose = require('mongoose');
+const amqp = require('amqplib');
 
-// Mismo esquema que microservicio-multimoneda -- este servicio solo LEE
-// esta coleccion, nunca crea ni modifica transferencias.
-const transferenciaSchema = new mongoose.Schema({
-    cuentaOrigen: { type: String, required: true },
-    cuentaDestino: { type: String, required: true },
-    montoOrigen: { type: Number, required: true },
-    montoDestino: { type: Number, required: true },
-    monedaOrigen: { type: String, required: true },
-    monedaDestino: { type: String, required: true },
-    tasaCambioAplicada: { type: Number, required: true },
-    estado: { type: String, required: true },
-    motivoRechazo: { type: String },
-    fecha: { type: Date, default: Date.now },
-});
+const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
+const EXCHANGE_NAME = 'banking.events';
+const QUEUE_NAME = 'reportes.eventos.queue';
+// Escucha CUALQUIER evento de transaccion (multimoneda, cuenta, retiro) --
+// simula que el servicio de reportes se entera cuando algo cambia, para
+// saber que un estado de cuenta podria necesitar regenerarse.
+const ROUTING_PATTERN = 'transaction.*';
 
-module.exports = mongoose.model('Transferencia', transferenciaSchema);
+async function connectRabbitMQConsumer() {
+    const conexion = await amqp.connect(RABBITMQ_URL);
+    const canal = await conexion.createChannel();
+
+    await canal.assertExchange(EXCHANGE_NAME, 'topic', { durable: true });
+    await canal.assertQueue(QUEUE_NAME, { durable: true });
+    await canal.bindQueue(QUEUE_NAME, EXCHANGE_NAME, ROUTING_PATTERN);
+    canal.prefetch(1);
+
+    console.log(`[RabbitMQ] Connected and exchange asserted: ${EXCHANGE_NAME}`);
+    console.log(`[Consumer-reportes] Escuchando cola "${QUEUE_NAME}" para el patron "${ROUTING_PATTERN}"`);
+
+    conexion.on('close', () => {
+        console.error('[RabbitMQ] Conexion cerrada inesperadamente');
+    });
+
+    canal.consume(QUEUE_NAME, (msg) => {
+        if (msg === null) return;
+        try {
+            const contenido = JSON.parse(msg.content.toString());
+            console.log(
+                `[Consumer-reportes] Evento recibido [${msg.fields.routingKey}] -- ` +
+                `posible regeneracion de reporte para cuenta relacionada:`,
+                contenido
+            );
+            canal.ack(msg);
+        } catch (err) {
+            console.error('[Consumer-reportes] Error procesando mensaje:', err.message);
+            canal.nack(msg, false, false);
+        }
+    });
+}
+
+module.exports = { connectRabbitMQConsumer };
