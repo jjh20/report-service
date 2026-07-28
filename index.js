@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const PDFDocument = require('pdfkit');
 const Account = require('./Account');
 const Transferencia = require('./Transferencia');
-
+const { connectRabbitMQConsumer } = require('./config/rabbitmq_consumer');
 const app = express();
 app.use(express.json());
 
