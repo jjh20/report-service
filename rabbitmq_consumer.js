@@ -8,6 +8,18 @@ const QUEUE_NAME = 'reportes.eventos.queue';
 // saber que un estado de cuenta podria necesitar regenerarse.
 const ROUTING_PATTERN = 'transaction.*';
 
+// Retraso artificial (en milisegundos) ANTES de confirmar cada mensaje.
+// En 0 (por defecto), el consumidor procesa casi instantaneo. Subelo
+// temporalmente (ej. 2000) para simular un consumidor lento y provocar
+// a proposito que la cola se sature con una rafaga de transacciones --
+// es el mismo mecanismo que ya usamos en el sandbox original de Docker
+// Compose (PROBABILIDAD_ATASCO), ahora contra el RabbitMQ real.
+const RETRASO_ARTIFICIAL_MS = parseInt(process.env.CONSUMER_DELAY_MS || '0', 10);
+
+function esperar(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function connectRabbitMQConsumer() {
     const conexion = await amqp.connect(RABBITMQ_URL);
     const canal = await conexion.createChannel();
@@ -18,13 +30,16 @@ async function connectRabbitMQConsumer() {
     canal.prefetch(1);
 
     console.log(`[RabbitMQ] Connected and exchange asserted: ${EXCHANGE_NAME}`);
-    console.log(`[Consumer-reportes] Escuchando cola "${QUEUE_NAME}" para el patron "${ROUTING_PATTERN}"`);
+    console.log(
+        `[Consumer-reportes] Escuchando cola "${QUEUE_NAME}" para el patron "${ROUTING_PATTERN}" ` +
+        `(retraso artificial: ${RETRASO_ARTIFICIAL_MS}ms)`
+    );
 
     conexion.on('close', () => {
         console.error('[RabbitMQ] Conexion cerrada inesperadamente');
     });
 
-    canal.consume(QUEUE_NAME, (msg) => {
+    canal.consume(QUEUE_NAME, async (msg) => {
         if (msg === null) return;
         try {
             const contenido = JSON.parse(msg.content.toString());
@@ -33,12 +48,20 @@ async function connectRabbitMQConsumer() {
                 `posible regeneracion de reporte para cuenta relacionada:`,
                 contenido
             );
+
+            if (RETRASO_ARTIFICIAL_MS > 0) {
+                await esperar(RETRASO_ARTIFICIAL_MS);
+            }
+
             canal.ack(msg);
         } catch (err) {
             console.error('[Consumer-reportes] Error procesando mensaje:', err.message);
+            // No se reintenta indefinidamente: se descarta el mensaje malformado
+            // en vez de dejarlo atascado en la cola para siempre.
             canal.nack(msg, false, false);
         }
     });
 }
 
 module.exports = { connectRabbitMQConsumer };
+
