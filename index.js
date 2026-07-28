@@ -17,16 +17,13 @@ console.log('URI:', process.env.MONGO_URI);
 mongoose.connect(process.env.MONGO_URI || 'mongodb://mongodb:27017/bankdb?retryWrites=false')
     .then(() => {
         console.log('MongoDB conectado exitosamente');
+        connectRabbitMQConsumer().catch(err => {
+            console.error('[RabbitMQ] Failed to connect, retrying in 5s...', err.message);
+            setTimeout(() => connectRabbitMQConsumer().catch(e => console.error('[RabbitMQ] Reintento fallido:', e.message)), 5000);
+        });
         app.listen(PUERTO, () => console.log(`Servicio de reportes corriendo en puerto ${PUERTO}`));
     })
     .catch(err => console.error('Error de conexión:', err));
-mongoose.connection.on('disconnected', () => {
-    console.error('[Mongo] Desconectado - el servicio esta operando sin base de datos');
-});
-
-mongoose.connection.on('reconnected', () => {
-    console.log('[Mongo] Reconectado exitosamente - servicio recuperado');
-});
 
 // Ruta de prueba
 app.get('/test', (req, res) => res.json({ status: 'OK', message: 'Servicio de reportes operativo' }));
