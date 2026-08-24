@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const PDFDocument = require('pdfkit');
 const Account = require('./Account');
 const Transferencia = require('./Transferencia');
-const { connectRabbitMQConsumer } = require('./config/rabbitmq_consumer');
+const { connectRabbitMQConsumer } = require('./config/ibmmq_consumer.js');
 const app = express();
 app.use(express.json());
 
@@ -29,7 +29,7 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://mongodb:27017/bankdb?retryW
 app.get('/test', (req, res) => res.json({ status: 'OK', message: 'Servicio de reportes operativo' }));
 
 /**
- * Genera movimientos sinteticos adicionales para completar el reporte
+ *Genera movimientos sinteticos adicionales para completar el reporte
  * hasta la cantidad solicitada -- esto es lo que permite provocar carga
  * de CPU real y controlable: mientras mas movimientos se pidan, mas
  * tarda en generarse el PDF (mas paginas, mas texto a dibujar).
